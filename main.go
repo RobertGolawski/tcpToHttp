@@ -1,28 +1,32 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 )
 
 func main() {
-	// fmt.Println("I hope I get the job!")
-
 	data := make([]byte, 8)
 
 	file, err := os.Open("./messages.txt")
 	if err != nil {
 		fmt.Printf("Error opening file: %v", err)
 	}
+	defer file.Close()
 
-	for err == nil {
-		_, err = file.Read(data)
-		fmt.Printf("read: %s\n", string(data))
-	}
-	if err == io.EOF {
-		os.Exit(0)
-	} else {
-		fmt.Printf("Encountered different error: %v", err)
+	var n int
+	for {
+		n, err = file.Read(data)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				fmt.Printf("Encountered different error: %v", err)
+				return
+			} else {
+				os.Exit(0)
+			}
+		}
+		fmt.Printf("read: %s\n", string(data[:n]))
 	}
 }
