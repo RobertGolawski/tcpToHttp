@@ -16,6 +16,7 @@ func main() {
 	}
 	defer file.Close()
 
+	var currLine string
 	var n int
 	for {
 		n, err = file.Read(data)
@@ -24,9 +25,19 @@ func main() {
 				fmt.Printf("Encountered different error: %v", err)
 				return
 			} else {
-				os.Exit(0)
+				break
 			}
 		}
-		fmt.Printf("read: %s\n", string(data[:n]))
+
+		str := string(data[:n])
+
+		for _, c := range str {
+			currLine += string(c)
+			if c == '\n' {
+				fmt.Printf("read: %v", currLine)
+				currLine = ""
+			}
+
+		}
 	}
 }
