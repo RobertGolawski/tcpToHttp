@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-	data := make([]byte, 8)
 
 	file, err := os.Open("./messages.txt")
 	if err != nil {
@@ -16,28 +15,52 @@ func main() {
 	}
 	defer file.Close()
 
-	var currLine string
-	var n int
+	myChan := getLinesChannel(file)
+
 	for {
-		n, err = file.Read(data)
-		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				fmt.Printf("Encountered different error: %v", err)
+		select {
+		case line, ok := <-myChan:
+			if !ok {
 				return
-			} else {
-				break
 			}
-		}
-
-		str := string(data[:n])
-
-		for _, c := range str {
-			currLine += string(c)
-			if c == '\n' {
-				fmt.Printf("read: %v", currLine)
-				currLine = ""
-			}
-
+			fmt.Printf("read: %v", line)
 		}
 	}
+}
+
+func getLinesChannel(f io.ReadCloser) <-chan string {
+	strChan := make(chan string)
+
+	go func(io.ReadCloser, chan string) {
+		defer f.Close()
+		data := make([]byte, 8)
+		var currLine string
+		var n int
+		var err error
+		for {
+			n, err = f.Read(data)
+			if err != nil {
+				if !errors.Is(err, io.EOF) {
+					fmt.Printf("Encountered unexpected error: %v", err)
+					close(strChan)
+					return
+				} else {
+					close(strChan)
+					return
+				}
+			}
+			str := string(data[:n])
+
+			for _, c := range str {
+				currLine += string(c)
+				if c == '\n' {
+					strChan <- currLine
+					currLine = ""
+				}
+			}
+		}
+	}(f, strChan)
+
+	return strChan
+
 }
