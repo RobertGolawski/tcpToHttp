@@ -4,35 +4,41 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"log"
+	"net"
 )
 
 func main() {
 
-	file, err := os.Open("./messages.txt")
+	listener, err := net.Listen("tcp", "127.0.0.1:42069")
 	if err != nil {
-		fmt.Printf("Error opening file: %v", err)
+		log.Fatalf("error making listener: %v", err)
 	}
-	defer file.Close()
 
-	myChan := getLinesChannel(file)
+	defer listener.Close()
 
 	for {
-		select {
-		case line, ok := <-myChan:
-			if !ok {
-				return
-			}
-			fmt.Printf("read: %v", line)
+		con, err := listener.Accept()
+		if err != nil {
+			continue
 		}
+
+		log.Println("Connection has been accepted")
+
+		myChan := getLinesChannel(con)
+		for line := range myChan {
+			log.Printf("%v\n", line)
+		}
+		con.Close()
+		log.Printf("Connection closed")
 	}
+
 }
 
 func getLinesChannel(f io.ReadCloser) <-chan string {
 	strChan := make(chan string)
 
 	go func(io.ReadCloser, chan string) {
-		defer f.Close()
 		data := make([]byte, 8)
 		var currLine string
 		var n int
