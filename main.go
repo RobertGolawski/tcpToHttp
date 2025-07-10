@@ -27,7 +27,7 @@ func main() {
 
 		myChan := getLinesChannel(con)
 		for line := range myChan {
-			log.Printf("%v\n", line)
+			fmt.Printf("%v\n", line)
 		}
 		con.Close()
 		log.Printf("Connection closed")
@@ -39,8 +39,7 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 	strChan := make(chan string)
 
 	go func(io.ReadCloser, chan string) {
-		data := make([]byte, 8)
-		var currLine string
+		data := make([]byte, 200)
 		var n int
 		var err error
 		for {
@@ -56,14 +55,7 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 				}
 			}
 			str := string(data[:n])
-
-			for _, c := range str {
-				currLine += string(c)
-				if c == '\n' {
-					strChan <- currLine
-					currLine = ""
-				}
-			}
+			strChan <- str
 		}
 	}(f, strChan)
 
