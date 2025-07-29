@@ -7,8 +7,14 @@ import (
 	"strings"
 )
 
+const (
+	crlf       = "\r\n"
+	bufferSize = 8
+)
+
 type Request struct {
 	RequestLine RequestLine
+	State       int
 }
 
 type RequestLine struct {
@@ -18,35 +24,60 @@ type RequestLine struct {
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
+	ret := Request{State: 0}
 
-	line, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	if len(line) == 0 {
-		return nil, errors.New("0 bytes in the message")
-	}
+	buf := make([]byte, bufferSize)
+	readToIndex := 0
 
-	l, err := parseRequestLine(line)
-	if err != nil {
-		return nil, err
-	}
+	for ret.State == 0 {
+		n, err := reader.Read(buf[readToIndex:])
+		if err != nil {
+			return nil, err
+		}
 
-	ret := Request{
-		RequestLine: l,
+		if readToIndex == len(buf) {
+			newBuf := make([]byte, len(buf)*2)
+			copy(newBuf, buf)
+			buf = newBuf
+		}
+
+		readToIndex += n
+
+		i, err := ret.parse(buf)
+		if err != nil {
+			return nil, err
+		}
+		if i != 0 {
+			buf = buf[n+1:]
+		}
+
 	}
 
 	return &ret, nil
 }
 
-func parseRequestLine(line []byte) (RequestLine, error) {
+func (r *Request) parse(data []byte) (int, error) {
+	rl, n, err := parseRequestLine(data)
+	if n != 0 && err == nil {
+		r.RequestLine = rl
+		r.State = 1
+	}
+
+	return n, err
+}
+
+func parseRequestLine(line []byte) (RequestLine, int, error) {
 	strLine := string(line)
 	strArr := strings.Split(strLine, "\r\n")
+
+	if !strings.Contains(strLine, crlf) {
+		return RequestLine{}, 0, nil
+	}
 
 	reqParse := strings.Split(strArr[0], " ")
 
 	if len(reqParse) != 3 {
-		return RequestLine{}, errors.New("incorrect number of request parts")
+		return RequestLine{}, 0, errors.New("incorrect number of request parts")
 	}
 
 	rLine := RequestLine{}
@@ -54,7 +85,7 @@ func parseRequestLine(line []byte) (RequestLine, error) {
 	method, err := verifyMethod(reqParse[0])
 	if err != nil {
 		log.Printf("error verifying method: %v for string: %s", err, reqParse[0])
-		return RequestLine{}, err
+		return RequestLine{}, 0, err
 	}
 
 	rLine.Method = method
@@ -62,7 +93,7 @@ func parseRequestLine(line []byte) (RequestLine, error) {
 	target, err := verifyTarget(reqParse[1])
 	if err != nil {
 		log.Printf("error verifying target: %v for string: %s", err, reqParse[1])
-		return RequestLine{}, err
+		return RequestLine{}, 0, err
 	}
 
 	rLine.RequestTarget = target
@@ -70,12 +101,12 @@ func parseRequestLine(line []byte) (RequestLine, error) {
 	version, err := verifyVersion(reqParse[2])
 	if err != nil {
 		log.Printf("error verifying version: %v for string: %s", err, reqParse[2])
-		return RequestLine{}, err
+		return RequestLine{}, 0, err
 	}
 
 	rLine.HTTPVersion = version
 
-	return rLine, nil
+	return rLine, len(strArr[0]) + 2, nil
 }
 
 func verifyMethod(m string) (string, error) {
