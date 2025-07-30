@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"strings"
-	"unicode"
 )
 
 type Headers map[string]string
 
-func NewHeaders() *Headers {
-	return &Headers{}
+func NewHeaders() Headers {
+	return Headers{}
 }
 
 const (
@@ -22,23 +21,30 @@ var (
 )
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
-
 	crlfIdx := bytes.Index(data, []byte(crlf))
 	if crlfIdx == -1 {
 		return 0, false, nil
 	}
 
-	firstColon := bytes.Index(data, separator)
-	if firstColon == -1 {
+	if crlfIdx == 0 {
+		return 2, true, nil
+	}
+
+	sepIdx := bytes.Index(data, separator)
+	if sepIdx == -1 {
 		return 0, true, errors.New("no appropriate separator found")
 	}
 
-	if data[firstColon-1] == ' ' {
-		return 0, true, errors.New("whitespace not allowed between field-name and separator")
+	if data[sepIdx-1] == ' ' {
+		return 0, false, errors.New("whitespace not allowed between field-name and separator")
 	}
 
-	key := string(data[:firstColon])
-	key = strings.TrimLeftFunc(key, unicode.IsSpace)
+	key := string(data[:sepIdx])
+	key = strings.TrimSpace(key)
+	val := string(data[sepIdx+1 : crlfIdx])
+	val = strings.TrimSpace(val)
 
-	return 0, false, nil
+	h[key] = val
+
+	return crlfIdx + 2, false, nil
 }
