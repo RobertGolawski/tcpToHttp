@@ -34,6 +34,10 @@ func main() {
 - Version: %s
 `, req.RequestLine.Method, req.RequestLine.RequestTarget, req.RequestLine.HTTPVersion)
 
+		fmt.Println("Headers:")
+		for k, v := range req.Headers {
+			fmt.Printf("- %v: %v\n", k, v)
+		}
 		con.Close()
 		log.Printf("Connection closed")
 	}

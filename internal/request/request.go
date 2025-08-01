@@ -50,17 +50,6 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		n, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				// if readToIndex > 0 {
-				// 	i, parseErr := ret.parse(buf[:readToIndex])
-				// 	if parseErr != nil {
-				// 		return nil, parseErr
-				// 	}
-				// 	// Update buffer even if we're about to exit
-				// 	if i > 0 {
-				// 		copy(buf, buf[i:])
-				// 		readToIndex -= i
-				// 	}
-				// }
 				if ret.State != requestStateDone {
 					return nil, errors.New("incomplete request")
 				}
