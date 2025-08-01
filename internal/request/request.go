@@ -50,17 +50,17 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		n, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				if readToIndex > 0 {
-					i, parseErr := ret.parse(buf[:readToIndex])
-					if parseErr != nil {
-						return nil, parseErr
-					}
-					// Update buffer even if we're about to exit
-					if i > 0 {
-						copy(buf, buf[i:])
-						readToIndex -= i
-					}
-				}
+				// if readToIndex > 0 {
+				// 	i, parseErr := ret.parse(buf[:readToIndex])
+				// 	if parseErr != nil {
+				// 		return nil, parseErr
+				// 	}
+				// 	// Update buffer even if we're about to exit
+				// 	if i > 0 {
+				// 		copy(buf, buf[i:])
+				// 		readToIndex -= i
+				// 	}
+				// }
 				if ret.State != requestStateDone {
 					return nil, errors.New("incomplete request")
 				}
@@ -85,8 +85,25 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 }
 
 func (r *Request) parse(line []byte) (int, error) {
-	// totalBytesParsed := 0
+	totalBytesParsed := 0
 
+	for r.State != requestStateDone {
+		n, err := r.parseSingle(line[totalBytesParsed:])
+		if err != nil {
+			return 0, err
+		}
+
+		totalBytesParsed += n
+		if n == 0 {
+			break
+		}
+	}
+
+	return totalBytesParsed, nil
+
+}
+
+func (r *Request) parseSingle(line []byte) (int, error) {
 	switch r.State {
 	case requestStateInitialised:
 		reqLine, n, err := parseRequestLine(line)
@@ -100,13 +117,10 @@ func (r *Request) parse(line []byte) (int, error) {
 		r.State = requestStateParsingHeaders
 		return n, nil
 	case requestStateParsingHeaders:
-		// log.Printf("line: %v", string(line))
 		n, done, err := r.Headers.Parse(line)
 		if err != nil {
 			return 0, err
 		}
-
-		// log.Printf("done: %v", done)
 
 		if done {
 			r.State = requestStateDone
@@ -114,40 +128,12 @@ func (r *Request) parse(line []byte) (int, error) {
 
 		return n, nil
 
-		// n := 0
-		// done := false
-		// var err error
-		// for !done {
-		// 	// log.Printf("total: %v", totalBytesParsed)
-		// 	// log.Printf("len: %v", len(line))
-		// 	log.Printf("line: %v", string(line))
-		// 	n, done, err = r.Headers.Parse(line[totalBytesParsed:])
-		// 	if err != nil {
-		// 		return n, err
-		// 	}
-		// 	if done {
-		// 		r.State = requestStateDone
-		// 		//return totalBytesParsed + n, nil
-		// 	}
-		//
-		// 	if n == 0 {
-		// 		return 0, nil
-		// 	}
-		// 	// log.Printf("adding to total: %v", n)
-		// 	// log.Printf("The map is: %v", r.Headers)
-		//
-		// 	totalBytesParsed += n
-		// }
-		// r.State = requestStateDone
-		// return totalBytesParsed, nil
 	case requestStateDone:
 		return 0, fmt.Errorf("error: trying to parse data in a done state")
 	default:
 		return 0, fmt.Errorf("error: unknown state")
 	}
 }
-
-// func
 
 func parseRequestLine(line []byte) (*RequestLine, int, error) {
 	idx := bytes.Index(line, []byte(crlf))

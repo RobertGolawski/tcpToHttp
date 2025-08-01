@@ -196,20 +196,20 @@ func TestEdgeCaseMultipleHeadersInLastRead(t *testing.T) {
 
 //Single loop fails on this test
 
-// func TestMultipleCompleteUnitsInSingleRead(t *testing.T) {
-// 	reader := &chunkReader{
-// 		data:            "GET / HTTP/1.1\r\nA: 1\r\nB: 2\r\nC: 3\r\n\r\n",
-// 		numBytesPerRead: 100, // Everything comes in one massive read
-// 	}
-//
-// 	r, err := RequestFromReader(reader)
-// 	require.NoError(t, err)
-// 	require.NotNil(t, r)
-// 	assert.Equal(t, 3, len(r.Headers))
-// 	assert.Equal(t, "1", r.Headers["a"])
-// 	assert.Equal(t, "2", r.Headers["b"])
-// 	assert.Equal(t, "3", r.Headers["c"])
-// }
+func TestMultipleCompleteUnitsInSingleRead(t *testing.T) {
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\nA: 1\r\nB: 2\r\nC: 3\r\n\r\n",
+		numBytesPerRead: 100, // Everything comes in one massive read
+	}
+
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, 3, len(r.Headers))
+	assert.Equal(t, "1", r.Headers["a"])
+	assert.Equal(t, "2", r.Headers["b"])
+	assert.Equal(t, "3", r.Headers["c"])
+}
 
 func TestSingleReadWithImmediateEOF(t *testing.T) {
 	reader := &chunkReader{
