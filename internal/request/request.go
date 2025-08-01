@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
 	// "log"
 	"strings"
 	"tcpToHttp/internal/headers"
@@ -49,7 +50,20 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		n, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				ret.State = requestStateDone
+				if readToIndex > 0 {
+					i, parseErr := ret.parse(buf[:readToIndex])
+					if parseErr != nil {
+						return nil, parseErr
+					}
+					// Update buffer even if we're about to exit
+					if i > 0 {
+						copy(buf, buf[i:])
+						readToIndex -= i
+					}
+				}
+				if ret.State != requestStateDone {
+					return nil, errors.New("incomplete request")
+				}
 				break
 			}
 			return nil, err
@@ -67,7 +81,6 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 
 	}
-
 	return &ret, nil
 }
 
@@ -87,28 +100,34 @@ func (r *Request) parse(line []byte) (int, error) {
 		r.State = requestStateParsingHeaders
 		return n, nil
 	case requestStateParsingHeaders:
-
+		// log.Printf("line: %v", string(line))
 		n, done, err := r.Headers.Parse(line)
 		if err != nil {
 			return 0, err
 		}
 
-		if !done {
-			return n, nil
+		// log.Printf("done: %v", done)
+
+		if done {
+			r.State = requestStateDone
 		}
 
-		r.State = requestStateDone
 		return n, nil
 
-		// for totalBytesParsed < 1 {
+		// n := 0
+		// done := false
+		// var err error
+		// for !done {
 		// 	// log.Printf("total: %v", totalBytesParsed)
 		// 	// log.Printf("len: %v", len(line))
-		// 	n, done, err := r.Headers.Parse(line[totalBytesParsed:])
+		// 	log.Printf("line: %v", string(line))
+		// 	n, done, err = r.Headers.Parse(line[totalBytesParsed:])
 		// 	if err != nil {
 		// 		return n, err
 		// 	}
-		// 	if !done {
-		// 		return totalBytesParsed + n, nil
+		// 	if done {
+		// 		r.State = requestStateDone
+		// 		//return totalBytesParsed + n, nil
 		// 	}
 		//
 		// 	if n == 0 {
@@ -127,6 +146,8 @@ func (r *Request) parse(line []byte) (int, error) {
 		return 0, fmt.Errorf("error: unknown state")
 	}
 }
+
+// func
 
 func parseRequestLine(line []byte) (*RequestLine, int, error) {
 	idx := bytes.Index(line, []byte(crlf))

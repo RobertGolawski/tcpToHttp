@@ -116,3 +116,108 @@ func TestRequestHeaders(t *testing.T) {
 	r, err = RequestFromReader(reader)
 	require.Error(t, err)
 }
+
+func TestHeadersParse(t *testing.T) {
+	// Test: Standard Headers
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:42069", r.Headers["host"])
+	assert.Equal(t, "curl/7.81.0", r.Headers["user-agent"])
+	assert.Equal(t, "*/*", r.Headers["accept"])
+
+	// Test: Empty Headers
+	reader = &chunkReader{
+		data:            "GET / HTTP/1.1\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Empty(t, r.Headers)
+
+	// Test: Malformed Header
+	reader = &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost localhost:42069\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.Error(t, err)
+
+	// Test: Duplicate Headers
+	reader = &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nHost: duplicate:8080\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:42069, duplicate:8080", r.Headers["host"])
+
+	// Test: Case Insensitive Headers
+	reader = &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHOST: localhost:42069\r\nUSER-AGENT: curl/7.81.0\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:42069", r.Headers["host"])
+	assert.Equal(t, "curl/7.81.0", r.Headers["user-agent"])
+
+	// Test: Missing End of Headers
+	reader = &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.Error(t, err)
+}
+
+func TestEdgeCaseMultipleHeadersInLastRead(t *testing.T) {
+	// This test will fail with single-step EOF processing
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: curl\r\nAccept: */*\r\n\r\n",
+		numBytesPerRead: 30, // Read most of it in one chunk
+	}
+
+	// First read: "GET / HTTP/1.1\r\nHost: localh" (30 bytes)
+	// Second read: "ost\r\nUser-Agent: curl\r\nAccept: */*\r\n\r\n" + EOF
+
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, 3, len(r.Headers)) // This will fail with single-step
+}
+
+//Single loop fails on this test
+
+// func TestMultipleCompleteUnitsInSingleRead(t *testing.T) {
+// 	reader := &chunkReader{
+// 		data:            "GET / HTTP/1.1\r\nA: 1\r\nB: 2\r\nC: 3\r\n\r\n",
+// 		numBytesPerRead: 100, // Everything comes in one massive read
+// 	}
+//
+// 	r, err := RequestFromReader(reader)
+// 	require.NoError(t, err)
+// 	require.NotNil(t, r)
+// 	assert.Equal(t, 3, len(r.Headers))
+// 	assert.Equal(t, "1", r.Headers["a"])
+// 	assert.Equal(t, "2", r.Headers["b"])
+// 	assert.Equal(t, "3", r.Headers["c"])
+// }
+
+func TestSingleReadWithImmediateEOF(t *testing.T) {
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost: test\r\nAuth: token\r\n\r\n",
+		numBytesPerRead: 1000, // All data in first read, immediate EOF
+	}
+
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(r.Headers))
+}
