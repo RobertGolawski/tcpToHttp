@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	// "log"
 	"strings"
+	"tcpToHttp/internal/headers"
 )
 
 const (
@@ -15,11 +17,13 @@ const (
 
 const (
 	requestStateInitialised int = iota
+	requestStateParsingHeaders
 	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     headers.Headers
 	State       int
 }
 
@@ -30,7 +34,7 @@ type RequestLine struct {
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	ret := Request{State: requestStateInitialised}
+	ret := Request{State: requestStateInitialised, Headers: headers.NewHeaders()}
 
 	buf := make([]byte, bufferSize)
 	readToIndex := 0
@@ -68,6 +72,8 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 }
 
 func (r *Request) parse(line []byte) (int, error) {
+	// totalBytesParsed := 0
+
 	switch r.State {
 	case requestStateInitialised:
 		reqLine, n, err := parseRequestLine(line)
@@ -78,8 +84,43 @@ func (r *Request) parse(line []byte) (int, error) {
 			return 0, nil
 		}
 		r.RequestLine = *reqLine
+		r.State = requestStateParsingHeaders
+		return n, nil
+	case requestStateParsingHeaders:
+
+		n, done, err := r.Headers.Parse(line)
+		if err != nil {
+			return 0, err
+		}
+
+		if !done {
+			return n, nil
+		}
+
 		r.State = requestStateDone
 		return n, nil
+
+		// for totalBytesParsed < 1 {
+		// 	// log.Printf("total: %v", totalBytesParsed)
+		// 	// log.Printf("len: %v", len(line))
+		// 	n, done, err := r.Headers.Parse(line[totalBytesParsed:])
+		// 	if err != nil {
+		// 		return n, err
+		// 	}
+		// 	if !done {
+		// 		return totalBytesParsed + n, nil
+		// 	}
+		//
+		// 	if n == 0 {
+		// 		return 0, nil
+		// 	}
+		// 	// log.Printf("adding to total: %v", n)
+		// 	// log.Printf("The map is: %v", r.Headers)
+		//
+		// 	totalBytesParsed += n
+		// }
+		// r.State = requestStateDone
+		// return totalBytesParsed, nil
 	case requestStateDone:
 		return 0, fmt.Errorf("error: trying to parse data in a done state")
 	default:
