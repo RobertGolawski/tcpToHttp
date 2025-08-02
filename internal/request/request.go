@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 
 	// "log"
 	"strings"
@@ -19,13 +20,17 @@ const (
 const (
 	requestStateInitialised int = iota
 	requestStateParsingHeaders
+	requestStateParsingBody
 	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
-	State       int
+	Body        []byte
+
+	bodyLengthRead int
+	State          int
 }
 
 type RequestLine struct {
@@ -35,7 +40,7 @@ type RequestLine struct {
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	ret := Request{State: requestStateInitialised, Headers: headers.NewHeaders()}
+	ret := Request{State: requestStateInitialised, Headers: headers.NewHeaders(), Body: []byte{}}
 
 	buf := make([]byte, bufferSize)
 	readToIndex := 0
@@ -112,10 +117,30 @@ func (r *Request) parseSingle(line []byte) (int, error) {
 		}
 
 		if done {
-			r.State = requestStateDone
+			r.State = requestStateParsingBody
 		}
 
 		return n, nil
+
+	case requestStateParsingBody:
+		key := "content-length"
+		//val := r.Headers.Get(key)
+		var val int
+		var err error
+		if val, err = strconv.Atoi(r.Headers.Get(key)); err != nil {
+			r.State = requestStateDone
+			return 0, nil
+		}
+
+		r.Body = append(r.Body, line...)
+		r.bodyLengthRead += len(line)
+
+		if r.bodyLengthRead > val {
+			return 0, errors.New("length of body greater than indicated in content length")
+		} else if r.bodyLengthRead == val {
+			r.State = requestStateDone
+		}
+		return len(line), nil
 
 	case requestStateDone:
 		return 0, fmt.Errorf("error: trying to parse data in a done state")

@@ -71,3 +71,8 @@ func checkForInvalid(s string) bool {
 	}
 	return false
 }
+
+func (h Headers) Get(key string) string {
+	key = strings.ToLower(key)
+	return h[key]
+}
