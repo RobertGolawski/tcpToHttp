@@ -54,7 +54,7 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	err := response.WriteStatusLine(conn, 200)
+	err := response.WriteStatusLine(conn, response.StatusOK)
 	if err != nil {
 		log.Printf("error writing statsline: %v", err)
 	}

@@ -10,26 +10,28 @@ import (
 type StatusCode int
 
 const (
-	StatusOK                  = 200
-	StatusBadRequest          = 400
-	StatusInternalServerError = 500
+	StatusOK                  StatusCode = 200
+	StatusBadRequest          StatusCode = 400
+	StatusInternalServerError StatusCode = 500
 )
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
-	switch statusCode {
+func getStatusLine(sc StatusCode) []byte {
+	reason := ""
+	switch sc {
 	case StatusOK:
-		_, err := w.Write([]byte("HTTP/1.1 200 OK\r\n"))
-		return err
+		reason = "OK"
 	case StatusBadRequest:
-		_, err := w.Write([]byte("HTTP/1.1 400 Bad Request\r\n"))
-		return err
+		reason = "Bad Request"
 	case StatusInternalServerError:
-		_, err := w.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n"))
-		return err
-	default:
-		_, err := w.Write([]byte(fmt.Sprintf("HTTP/1.1 %v \r\n", statusCode)))
-		return err
+		reason = "Internal Server Error"
 	}
+
+	return []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", sc, reason))
+}
+
+func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+	_, err := w.Write(getStatusLine(statusCode))
+	return err
 }
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
@@ -41,6 +43,8 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 }
 
 func WriteHeaders(w io.Writer, headers headers.Headers) error {
+	//I actually wrote this initially to be basically the same
+	//as the answer with a loop over k, v and writing the headers one by one but then changed it :madge:
 	str := ""
 	for k, v := range headers {
 		str += fmt.Sprintf("%v: %v\r\n", k, v)
