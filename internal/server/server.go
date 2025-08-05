@@ -1,18 +1,11 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
-	"strconv"
-)
-
-const (
-	serverState int = iota
-	serverInitialised
-	serverListening
-	serverClosing
+	"sync/atomic"
+	"tcpToHttp/internal/response"
 )
 
 var (
@@ -20,47 +13,37 @@ var (
 )
 
 type Server struct {
-	state    int
-	Port     string
-	Listener *net.Listener
+	listener net.Listener
+	Closed   atomic.Bool
 }
 
 func Serve(port int) (*Server, error) {
-	portString := strconv.Itoa(port)
-	s := Server{state: serverInitialised, Port: portString}
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{listener: listener}
+
 	go s.listen()
 
-	return &s, nil
+	return s, nil
 }
 
 func (s *Server) Close() error {
-	if s.state == serverClosing {
-		return errors.New("Cannot close a server that's closing")
+	s.Closed.Store(true)
+	if s.listener != nil {
+		s.listener.Close()
 	}
-
-	s.state = serverClosing
 	return nil
 }
 
 func (s *Server) listen() {
-	if s.state == serverInitialised {
-		s.state = serverListening
-	} else {
-		log.Println("Cannot listen to a server that's already listening or closed")
-		return
-	}
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", s.Port))
-	if err != nil {
-		log.Printf("error when opening a listener: %v", err)
-		return
-	}
-
-	defer listener.Close()
-	s.Listener = &listener
-
-	for s.state == serverListening {
-		con, err := listener.Accept()
+	for {
+		con, err := s.listener.Accept()
 		if err != nil {
+			if s.Closed.Load() {
+				return
+			}
 			log.Printf("error accepting connection: %v", err)
 			continue
 		}
@@ -70,7 +53,15 @@ func (s *Server) listen() {
 }
 
 func (s *Server) handle(conn net.Conn) {
-	fmt.Printf("%v", string(reply))
-	conn.Write(reply)
-	conn.Close()
+	defer conn.Close()
+	err := response.WriteStatusLine(conn, 200)
+	if err != nil {
+		log.Printf("error writing statsline: %v", err)
+	}
+	defaultHeaders := response.GetDefaultHeaders(0)
+	err = response.WriteHeaders(conn, defaultHeaders)
+	if err != nil {
+		log.Printf("error writing headers: %v", err)
+	}
+	return
 }
