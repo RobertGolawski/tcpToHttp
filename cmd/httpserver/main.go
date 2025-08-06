@@ -1,28 +1,105 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"tcpToHttp/internal/request"
+	"tcpToHttp/internal/response"
 	"tcpToHttp/internal/server"
 )
 
 const port = 42069
 
-func handler(w io.Writer, req *request.Request) *server.HandlerError {
+func handler(w *response.Writer, req *request.Request) {
 	switch req.RequestLine.RequestTarget {
 	case "/yourproblem":
-		return &server.HandlerError{StatusCode: 400, Message: "Your problem is not my problem\n"}
+		body := []byte(`<html>
+  <head>
+    <title>400 Bad Request</title>
+  </head>
+  <body>
+    <h1>Bad Request</h1>
+    <p>Your request honestly kinda sucked.</p>
+  </body>
+</html>`)
+		err := w.WriteStatusLine(response.StatusBadRequest)
+		if err != nil {
+			log.Printf("error writing status line: %v", err)
+			return
+		}
+		h := response.GetDefaultHeaders(len(body))
+		err = w.WriteHeaders(h)
+		if err != nil {
+			log.Printf("error writing headers: %v", err)
+			return
+		}
+		err = w.WriteBody(body)
+		if err != nil {
+			log.Printf("error writing body: %v", err)
+			return
+		}
+		return
 	case "/myproblem":
-		return &server.HandlerError{StatusCode: 500, Message: "Woopsie, my bad\n"}
+		body := []byte(`<html>
+  <head>
+    <title>500 Internal Server Error</title>
+  </head>
+  <body>
+    <h1>Internal Server Error</h1>
+    <p>Okay, you know what? This one is on me.</p>
+  </body>
+</html>`)
+		err := w.WriteStatusLine(response.StatusInternalServerError)
+		if err != nil {
+			log.Printf("error writing status line: %v", err)
+			return
+		}
+		h := response.GetDefaultHeaders(len(body))
+		err = w.WriteHeaders(h)
+		if err != nil {
+			log.Printf("error writing headers: %v", err)
+			return
+		}
+		err = w.WriteBody(body)
+		if err != nil {
+			log.Printf("error writing body: %v", err)
+			return
+		}
+		return
 	default:
-		w.Write([]byte("All good, frfr\n"))
-		return nil
+		body := []byte(`<html>
+  <head>
+    <title>200 OK</title>
+  </head>
+  <body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+  </body>
+</html>`)
+		err := w.WriteStatusLine(response.StatusOK)
+		if err != nil {
+			log.Printf("error writing status line: %v", err)
+			return
+		}
+		h := response.GetDefaultHeaders(len(body))
+		err = w.WriteHeaders(h)
+		if err != nil {
+			log.Printf("error writing headers: %v", err)
+			return
+		}
+		err = w.WriteBody(body)
+		if err != nil {
+			log.Printf("error writing body: %v", err)
+			return
+		}
 	}
 }
+
+// func handler(w *response.Writer, req *request.Request) {
+// 	err := w.WriteStatusLine(req.)
+// }
 
 func main() {
 	server, err := server.Serve(port, handler)

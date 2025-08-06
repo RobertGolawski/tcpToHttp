@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -11,15 +10,18 @@ import (
 	"tcpToHttp/internal/response"
 )
 
-var (
-	reply = []byte("HTTP/1.1 200 OK\nContent-Type: text/plain\n\nHello World!")
-)
-
 type Server struct {
 	listener net.Listener
 	handler  Handler
 	Closed   atomic.Bool
 }
+
+type HandlerError struct {
+	StatusCode int
+	Message    string
+}
+
+type Handler func(w *response.Writer, req *request.Request)
 
 func Serve(port int, handler Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -65,23 +67,9 @@ func (s *Server) handle(conn net.Conn) {
 		return
 	}
 
-	var bodyBuffer bytes.Buffer
-	handlerErr := s.handler(&bodyBuffer, req)
-	if handlerErr != nil {
-		WriteHandlerError(conn, handlerErr)
-		return
-	}
+	writer := response.Writer{Con: conn, WriterState: response.WriterStatusLine}
+	s.handler(&writer, req)
 
-	err = response.WriteStatusLine(conn, response.StatusOK)
-	if err != nil {
-		log.Printf("error writing statsline: %v", err)
-	}
-	defaultHeaders := response.GetDefaultHeaders(bodyBuffer.Len())
-	err = response.WriteHeaders(conn, defaultHeaders)
-	if err != nil {
-		log.Printf("error writing headers: %v", err)
-	}
-	conn.Write(bodyBuffer.Bytes())
 	return
 }
 
